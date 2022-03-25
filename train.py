@@ -22,6 +22,8 @@ from SnekNet import SnekNet
 import random
 import argparse
 import pandas as pd
+import time
+from tqdm import tqdm
 
 def create_argparser():
     parser = argparse.ArgumentParser()
@@ -41,11 +43,13 @@ print(f"Training on: {device}")
 def main(args):
     data_transforms = {
         'train' : transforms.Compose([
-            transforms.RandomRotation((-180,180)), 
-            transforms.RandomResizedCrop(240),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
+            #transforms.RandomRotation((-180,180)), 
+            transforms.RandomResizedCrop((240,240)),
             transforms.ToTensor(),
+            #transforms.Resize((240,240)),
+            #transforms.RandomHorizontalFlip(),
+            #transforms.RandomVerticalFlip(),
+            
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),
         'valid' : transforms.Compose([
@@ -57,8 +61,8 @@ def main(args):
 
 
     image_datasets = {
-        'train' : SnekData("TRAIN_SnakeCLEF2022-TrainMetadata.csv", ".", data_transforms['train']),
-        'valid' : SnekData("TEST_SnakeCLEF2022-TrainMetadata.csv", ".", data_transforms['valid'])
+        'train' : SnekData("TRAIN_SnakeCLEF2022-TrainMetadata.csv", args.data_dir, data_transforms['train']),
+        'valid' : SnekData("TRAIN_SnakeCLEF2022-TrainMetadata.csv", args.data_dir, data_transforms['valid'])
     }
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], 
                     batch_size=args.batch_size, shuffle=True, num_workers=4) for x in ['train', 'valid'] }
@@ -85,6 +89,7 @@ def main(args):
 
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
+    model = model.to(device)
 
     model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, num_epochs=25)
 
@@ -99,7 +104,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, num_epochs=
         print('-' * 10)
 
         # Each epoch has a training and validation phase
-        for phase in ['train', 'valid']:
+        for phase in ['train','valid']:#, 'valid']:
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
@@ -109,7 +114,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, num_epochs=
             running_corrects = 0
 
             # Iterate over data.
-            for datum in dataloaders[phase]:
+            for datum in tqdm(dataloaders[phase]):
                 inputs = datum['image'].to(device)
                 labels = datum['class_id'].to(device)
 

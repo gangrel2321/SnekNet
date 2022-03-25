@@ -1,13 +1,17 @@
 from torch.utils.data import Dataset
 import pandas as pd
-import imageio as io
+from PIL import Image
+import os
+import torch
+from PIL import ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class SnekData(Dataset):
     '''Snake dataset'''
     
     def __init__(self, csv_file, root_dir, transform=None):
         self.metadata = pd.read_csv(csv_file)
-        print(self.metadata.columns.values.tolist())
         self.root = root_dir
         self.transform = transform
         self.classes = self.metadata['binomial_name'].unique()
@@ -21,7 +25,7 @@ class SnekData(Dataset):
         
         img_path = os.path.join(self.root,
                                 self.metadata["file_path"].iloc[idx])
-        image = io.imread(img_path)
+        image = Image.open(img_path).convert('RGB')
         sample = {
             'image' : image,
             'class_id' : self.metadata["class_id"].iloc[idx],
