@@ -8,18 +8,20 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import torch.nn as nn
 import torch.nn.functional as F
 
-import time
-import json
-import path
-import copyimport matplotlib.pyplot as plt
-import seaborn as sns
+from pathlib import Path
+import matplotlib.pyplot as plt
 import numpy as np
 import PIL 
 from PIL import Image
 from collections import OrderedDict
+import copy
 
-import argparse
+from SnekData import SnekData
 from SnekNet import SnekNet
+
+import random
+import argparse
+import pandas as pd
 
 def create_argparser():
     parser = argparse.ArgumentParser()
@@ -45,7 +47,7 @@ def main(args):
             transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        ]),
         'valid' : transforms.Compose([
             transforms.Resize(240),
             transforms.ToTensor(),
@@ -53,8 +55,11 @@ def main(args):
         ])
     }
 
-    image_datasets = {x : datasets.ImageFolder(Path(args.data_dir) / x, 
-                        data_transforms[x]) for x in ['train','valid'] }
+
+    image_datasets = {
+        'train' : SnekData("TRAIN_SnakeCLEF2022-TrainMetadata.csv", ".", data_transforms['train']),
+        'valid' : SnekData("TEST_SnakeCLEF2022-TrainMetadata.csv", ".", data_transforms['valid'])
+    }
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], 
                     batch_size=args.batch_size, shuffle=True, num_workers=4) for x in ['train', 'valid'] }
 
@@ -69,19 +74,21 @@ def main(args):
     model = models.vgg19(pretrained=True) # models.resnet18(pretrained=True)
     for param in model.parameters():
         param.requires_grad = False
-    num_ftrs = model.fc.in_features
-    model_ft.fc = nn.Linaer(num_ftrs,2)
+    num_features = model.classifier[6].in_features
+    features = list(model.classifier.children())[:-1] # remove last layer
+    features.extend([nn.Linear(num_features, len(classes))]) # create new layer
+    model.classifier = nn.Sequential(*features) # add our updates
 
     criterion = nn.CrossEntropyLoss()
 
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+    optimizer_ft = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
 
-    model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, num_epochs=25)
+    model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, num_epochs=25)
 
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(model, criterion, optimizer, scheduler, dataloaders, num_epochs=25):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -92,7 +99,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
         print('-' * 10)
 
         # Each epoch has a training and validation phase
-        for phase in ['train', 'val']:
+        for phase in ['train', 'valid']:
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
@@ -102,9 +109,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             running_corrects = 0
 
             # Iterate over data.
-            for inputs, labels in dataloaders[phase]:
-                inputs = inputs.to(device)
-                labels = labels.to(device)
+            for datum in dataloaders[phase]:
+                inputs = datum['image'].to(device)
+                labels = datum['class_id'].to(device)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
