@@ -66,8 +66,8 @@ def main(args):
 
 
     image_datasets = {
-        'train' : SnekData("TRAIN_SnakeCLEF2022-TrainMetadata.csv", args.data_dir, data_transforms['train']),
-        'valid' : SnekData("TRAIN_SnakeCLEF2022-TrainMetadata.csv", args.data_dir, data_transforms['valid'])
+        'train' : SnekData("training.csv", args.data_dir, data_transforms['train']),
+        'valid' : SnekData("validation.csv", args.data_dir, data_transforms['valid'])
     }
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], 
                     batch_size=args.batch_size, shuffle=True, num_workers=32) for x in ['train', 'valid'] }
