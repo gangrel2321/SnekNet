@@ -26,15 +26,17 @@ import pandas as pd
 import time
 import os
 from tqdm import tqdm
+import os
 
 def create_argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--log_dir', type=str, default='./logs')
     args = parser.parse_args()
     return args
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 
 seed = 1
@@ -118,7 +120,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
         print('-' * 10)
 
         # Each epoch has a training and validation phase
-        for phase in ['train']: #, 'valid']:
+        for phase in ['train','valid']:
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
@@ -142,16 +144,15 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
                     with torch.cuda.amp.autocast():
                         outputs = model(inputs)
                         outputs = torch.nn.functional.softmax(outputs,-1)
-                        #preds = torch.argmax(outputs,dim=1)
                         loss = criterion(outputs, labels)
                         preds = torch.argmax(outputs,dim=1)
 
                     # backward + optimize only if in training phase
-                    if phase == 'train':                        
+                    if phase == 'train':
                         scaler.scale(loss).backward()
-                        #optimizer.step()
                         scaler.step(optimizer)
                         scaler.update()
+
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
@@ -164,15 +165,15 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
             mean_f1 = f1_score / (dataset_sizes[phase] / args.batch_size)
 
-            print(f'Mean F1-Score: {mean_f1}')
+            print(f"Mean F1-Score: {mean_f1}")
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
             # deep copy the model
-            if phase == 'val' and epoch_acc > best_acc:
+            if phase == 'valid' and epoch_acc > best_acc:
                 print("Saving...")
                 best_acc = epoch_acc
-                torch.save(model.state_dict(), f"./logs/{epoch}weights.pt")
+                torch.save(model.state_dict(), f"{args.log_dir}/{epoch}_best_weights.pt")
 
         print()
 
@@ -180,7 +181,6 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
     print('Best val Acc: {:4f}'.format(best_acc))
-
 
 if __name__ == "__main__":
     args = create_argparser()

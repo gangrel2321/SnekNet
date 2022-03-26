@@ -18,7 +18,7 @@ class SnekData(Dataset):
         self.root = root_dir
         self.transform = transform
 
-    def _map_classes(self,metadata):
+    def _map_classes(self, metadata):
         ids = list(metadata['class_id'].unique())
         id_to_idx = {ids[i] : i for i in range(len(ids))}
         return id_to_idx
