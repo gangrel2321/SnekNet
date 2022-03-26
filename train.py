@@ -31,6 +31,7 @@ def create_argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--log_dir', type=str, default='./logs')
     args = parser.parse_args()
     return args
 
@@ -169,7 +170,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, num_epochs=
             if phase == 'valid' and epoch_acc > best_acc:
                 print("Saving...")
                 best_acc = epoch_acc
-                torch.save(model.state_dict(), f"./logs/{epoch}_best_weights.pt")
+                torch.save(model.state_dict(), f"{args.log_dir}/{epoch}_best_weights.pt")
 
         print()
 
