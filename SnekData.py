@@ -11,10 +11,11 @@ class SnekData(Dataset):
     '''Snake dataset'''
     
     def __init__(self, csv_file, root_dir, transform=None):
-        self.metadata = pd.read_csv(csv_file)
+        metadata = pd.read_csv(csv_file)
+        self.classes = metadata['binomial_name'].unique()
         self.root = root_dir
         self.transform = transform
-        self.classes = self.metadata['binomial_name'].unique()
+        self.metadata = metadata
 
     def __len__(self):
         return len(self.metadata)
