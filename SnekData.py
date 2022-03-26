@@ -11,10 +11,17 @@ class SnekData(Dataset):
     '''Snake dataset'''
     
     def __init__(self, csv_file, root_dir, transform=None):
-        self.metadata = pd.read_csv(csv_file)
+        metadata = pd.read_csv(csv_file)
+        self.classes = metadata['binomial_name'].unique()
+        self.class_to_idx = self._map_classes(metadata)
+        self.metadata = metadata
         self.root = root_dir
         self.transform = transform
-        self.classes = self.metadata['binomial_name'].unique()
+
+    def _map_classes(self,metadata):
+        ids = list(metadata['class_id'].unique())
+        id_to_idx = {ids[i] : i for i in range(len(ids))}
+        return id_to_idx
 
     def __len__(self):
         return len(self.metadata)
@@ -28,6 +35,7 @@ class SnekData(Dataset):
         image = Image.open(img_path).convert('RGB')
         sample = {
             'image' : image,
+            'label_id' : self.class_to_idx[self.metadata["class_id"].iloc[idx]],
             'class_id' : self.metadata["class_id"].iloc[idx],
             'observation_id' : self.metadata["observation_id"].iloc[idx],
             'endemic' : self.metadata["endemic"].iloc[idx],
