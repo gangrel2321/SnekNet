@@ -13,13 +13,15 @@ class SnekData(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
         metadata = pd.read_csv(csv_file)
         self.classes = metadata['binomial_name'].unique()
-        self.class_to_idx = self._map_classes(metadata)
+        self.class_to_idx = self._map_classes(metadata,'class_id')
+        self.country_to_idx = self._map_classes(metadata,'country')
+        self.code_to_idx = self._map_classes(metadata,'code')
         self.metadata = metadata
         self.root = root_dir
         self.transform = transform
 
-    def _map_classes(self, metadata):
-        ids = list(metadata['class_id'].unique())
+    def _map_classes(self, metadata, label):
+        ids = list(metadata[label].unique())
         id_to_idx = {ids[i] : i for i in range(len(ids))}
         return id_to_idx
 
@@ -38,9 +40,9 @@ class SnekData(Dataset):
             'label_id' : self.class_to_idx[self.metadata["class_id"].iloc[idx]],
             'class_id' : self.metadata["class_id"].iloc[idx],
             'observation_id' : self.metadata["observation_id"].iloc[idx],
-            'endemic' : self.metadata["endemic"].iloc[idx],
-            'country' : self.metadata["country"].iloc[idx],
-            'code' : self.metadata["code"].iloc[idx]
+            'endemic' : int(self.metadata["endemic"].iloc[idx]),
+            'country' : self.country_to_idx[self.metadata["country"].iloc[idx]],
+            'code' : self.code_to_idx[self.metadata["code"].iloc[idx]]
         }
 
         if self.transform:

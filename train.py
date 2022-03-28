@@ -67,11 +67,11 @@ def main(args):
 
 
     image_datasets = {
-        'train' : SnekData("training.csv", args.data_dir, data_transforms['train']),
+        'train' : SnekData("validation.csv", args.data_dir, data_transforms['train']),
         'valid' : SnekData("validation.csv", args.data_dir, data_transforms['valid'])
     }
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], 
-                    batch_size=args.batch_size, shuffle=True, num_workers=32) for x in ['train', 'valid'] }
+                    batch_size=args.batch_size, shuffle=True, num_workers=128) for x in ['train', 'valid'] }
 
     classes = image_datasets['train'].classes
     print("Num Classes:", len(classes))
@@ -86,31 +86,31 @@ def main(args):
     print("Valid Size:", valid_size)
 
     # temporary
-    model = models.vgg19(pretrained=True) # models.resnet18(pretrained=True)
-    for param in model.parameters():
+    vgg = models.vgg19(pretrained=True) # models.resnet18(pretrained=True)
+    for param in vgg.parameters():
         param.requires_grad = False
-    num_features = model.classifier[6].in_features
-    print("Num features:", num_features)
-    features = list(model.classifier.children())[:-1] # remove last layer
-    features.extend([nn.Linear(num_features, len(classes))]) # create new layer
-    model.classifier = nn.Sequential(*features) # add our updates
+    model = SnekNet(vgg, num_classes=len(classes))
+    #num_features = model.classifier[6].in_features
+    #features = list(model.classifier.children())[:-1] # remove last layer
+    #features.extend([nn.Linear(num_features, len(classes))]) # create new layer
+    #model.classifier = nn.Sequential(*features) # add our updates
+    model = nn.DataParallel(model)
+    model = model.to(device)
 
     criterion = nn.CrossEntropyLoss()
 
-    optimizer_ft = optim.Adam(model.parameters(), lr=0.005, betas=(0.9,0.999),eps=1e-08,weight_decay=1e-07) 
+    optimizer_ft = optim.Adam(model.parameters(), lr=0.1, betas=(0.9,0.999),eps=1e-08,weight_decay=1e-07) 
     #optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-    model = nn.DataParallel(model)
 
-    model = model.to(device)
 
     model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=25)
 
 def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_sizes, num_epochs=25):
     since = time.time()
-    scaler = torch.cuda.amp.GradScaler()
+    #scaler = torch.cuda.amp.GradScaler()
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
@@ -134,24 +134,27 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
             for datum in tqdm(dataloaders[phase]):
                 inputs = datum['image'].to(device)
                 labels = datum['label_id'].to(device)
-
+                metadata = torch.cat( (datum['endemic'].reshape(-1,1), datum['country'].reshape(-1,1), datum['code'].reshape(-1,1)), axis=1)
+                metadata = metadata.to(device)
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    with torch.cuda.amp.autocast():
-                        outputs = model(inputs)
-                        outputs = torch.nn.functional.softmax(outputs,-1)
-                        loss = criterion(outputs, labels)
-                        preds = torch.argmax(outputs,dim=1)
+                    #with torch.cuda.amp.autocast():
+                    outputs = model(inputs, metadata.float())
+                    outputs = torch.nn.functional.softmax(outputs,-1)
+                    loss = criterion(outputs, labels)
+                    preds = torch.argmax(outputs,dim=1)
 
                     # backward + optimize only if in training phase
                     if phase == 'train':
-                        scaler.scale(loss).backward()
-                        scaler.step(optimizer)
-                        scaler.update()
+                        loss.backward()
+                        optimizer.step()
+                        #scaler.scale(loss).backward()
+                        #scaler.step(optimizer)
+                        #scaler.update()
 
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
